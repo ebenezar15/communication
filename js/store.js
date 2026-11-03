@@ -14,7 +14,7 @@
       createdAt: Date.now(),
       profile: {
         name: '', goal: null, level: 'L1', onboarded: false, style: 'direct', accent: 'en-US',
-        transcriptMode: 'auto', theme: 'auto', mentorRate: 1,
+        transcriptMode: 'auto', theme: 'auto', scheme: 'velvet', mentorRate: 1,
         settings: { stutterFriendly: false, scoreFillers: true, scorePace: true, reducedMotion: false }
       },
       xp: 0,

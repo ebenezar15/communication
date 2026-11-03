@@ -127,8 +127,8 @@
 
   // ---------- Phrase Forge ----------
   GYM.forge = function (el) {
-    var pre = sessionStorage.getItem('forge-input') || '';
-    sessionStorage.removeItem('forge-input');
+    var pre = App.session.get('forge-input') || '';
+    App.session.remove('forge-input');
     el.innerHTML = back('Phrase Forge') + '<h1>Phrase Forge</h1><p class="muted">Bring your own sentence — ideally one you actually said. Get three upgrades, pick one, and <strong>say it</strong>.</p>' +
       '<div class="card"><label class="field"><span>Your sentence</span><textarea id="fin" rows="3" placeholder="I think maybe we should probably try to reduce the delay somehow.">' + esc(pre) + '</textarea></label><button class="btn primary" id="fgo">Forge it</button></div><div id="fout"></div>';
     function run() {
@@ -327,7 +327,7 @@
   // ---------- Impromptu ----------
   GYM.impromptu = function (el, args) {
     var s = Store.get();
-    var cat = sessionStorage.getItem('imp-cat') || 'all';
+    var cat = App.session.get('imp-cat') || 'all';
     var pool = RC.prompts.filter(function (p) { return cat === 'all' || p.category === cat; });
     var p = args[0] ? RC.prompts.find(function (x) { return x.id === args[0]; }) : App.pick(pool);
     if (!p) p = App.pick(RC.prompts);
@@ -335,7 +335,7 @@
     el.innerHTML = back('Impromptu') + '<h1>Impromptu</h1><div class="tabs small">' + cats.map(function (c) { return '<button class="' + (c === cat ? 'sel' : '') + '" data-cat="' + c + '">' + esc(c) + '</button>'; }).join('') + '</div>' +
       '<div class="card"><div class="row between"><p class="eyebrow">' + esc(p.category) + ' · level ' + p.level + '</p><button class="btn ghost sm" data-new>🎲 New prompt</button></div><h2>“' + esc(p.text) + '”</h2>' +
       '<p class="muted small">Quick structure: <b>Point</b> → <b>Reason</b> ("because…") → <b>Example</b> ("for example…") → <b>Point</b> again.</p><div id="ist"></div></div>';
-    on(el, '[data-cat]', 'click', function (e, b) { sessionStorage.setItem('imp-cat', b.getAttribute('data-cat')); App.go('#/gym/impromptu'); App.render(); });
+    on(el, '[data-cat]', 'click', function (e, b) { App.session.set('imp-cat', b.getAttribute('data-cat')); App.go('#/gym/impromptu'); App.render(); });
     on(el, '[data-new]', 'click', function () { App.go('#/gym/impromptu/' + App.pick(pool).id); });
     App.mountStage($('#ist', el), { kind: 'speak', prompt: '', seconds: 60, ref: p.id, focus: ['structure', 'opening'], onComplete: function () { drillXp('impromptu'); App.go('#/gym/impromptu/' + App.pick(pool).id); }, doneLabel: 'Next prompt →' });
   };

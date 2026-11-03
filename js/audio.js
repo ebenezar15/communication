@@ -204,7 +204,39 @@
   }
   function stopSpeaking() { if (root.speechSynthesis) speechSynthesis.cancel(); }
 
+  /**
+   * Analyse an uploaded recording (e.g. a phone voice memo) into the same shape Recorder.stop() returns.
+   * Used when the microphone is unavailable. Transcript is left empty; the user can type what they said.
+   */
+  async function analyzeFile(file, onProgress) {
+    var Ctx = root.AudioContext || root.webkitAudioContext;
+    var ctx = new Ctx();
+    var buf;
+    try { buf = await ctx.decodeAudioData(await file.arrayBuffer()); }
+    finally { try { ctx.close(); } catch (e) { /* */ } }
+    var rate = buf.sampleRate;
+    var data = buf.getChannelData(0);
+    var maxSamples = Math.min(data.length, rate * 180); // first 3 minutes
+    var hop = Math.round(rate * 0.04), win = 2048;
+    var half = new Float32Array(win / 2);
+    var frames = [];
+    for (var start = 0; start + win <= maxSamples; start += hop) {
+      var sum = 0, peak = 0;
+      for (var i = 0; i < win; i++) { var v = data[start + i]; sum += v * v; var av = v < 0 ? -v : v; if (av > peak) peak = av; }
+      var rms = Math.sqrt(sum / win);
+      for (i = 0; i < half.length; i++) half[i] = (data[start + 2 * i] + data[start + 2 * i + 1]) / 2;
+      var pitch = rms > 0.012 ? root.Analysis.detectPitch(half, rate / 2) : 0;
+      frames.push({ t: Math.round(start / rate * 1000), rms: rms, peak: peak, pitch: pitch });
+      if (frames.length % 250 === 0) { if (onProgress) onProgress(start / maxSamples); await new Promise(function (r) { setTimeout(r, 0); }); }
+    }
+    return {
+      blob: file, frames: frames, durationMs: Math.round(maxSamples / rate * 1000),
+      transcript: '', segments: [], transcriptSource: 'none', recError: null, uploaded: true
+    };
+  }
+
   root.Audio2 = {
+    analyzeFile: analyzeFile,
     Recorder: Recorder, speak: speak, stopSpeaking: stopSpeaking, recognitionSupport: recognitionSupport,
     installLocalRecognition: installLocalRecognition, hasRecognition: !!SR, hasTTS: !!root.speechSynthesis,
     hasMic: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && root.MediaRecorder)

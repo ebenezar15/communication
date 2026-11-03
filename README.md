@@ -16,6 +16,27 @@ Then open http://localhost:8080. In Chrome or Edge, click **Install** in the add
 
 To host it, copy the folder to any static host that serves HTTPS, such as GitHub Pages or Netlify.
 
+## Share it
+
+There are two ways to give someone a link.
+
+- **Full app (recommended): GitHub Pages.** The workflow in `.github/workflows/pages.yml` publishes the app on every push. Turn it on once in the repo under **Settings → Pages → Build and deployment → Source: GitHub Actions**. The app is then at `https://ebenezar15.github.io/communication/`, with the microphone, offline caching and "Install app" all working.
+- **Single file.** `npm run build:single` writes `dist/rostrum.html`, with all CSS and JS inlined. You can host it anywhere, including as a claude.ai artifact. Some hosts, including claude.ai artifacts, block the microphone. There the app shows **Upload a recording** instead: record a voice memo on your phone and upload it to get the same feedback.
+
+Each person who opens a link gets their own private progress, stored in their own browser.
+
+## Colour schemes
+
+In **Settings → Colour scheme**, pick one of five palettes:
+
+- **Velvet**: theatre gold and red
+- **Harbour**: navy, teal and coral
+- **Greenroom**: forest, brass and rust
+- **Dressing Room**: plum, rose and apricot
+- **High Contrast**: maximum legibility
+
+Each palette has a designed light and dark version. **Light or dark** can follow your device or be fixed. The palettes are CSS tokens at the top of `css/app.css`.
+
 ## Run the tests
 
 ```bash
@@ -56,6 +77,7 @@ Every recording ends in the same loop:
   - **Best available:** may send audio to the browser maker.
   - **Off:** the app still gives voice metrics, and you can type what you said to get language feedback.
 - **Model audio** uses the device's built-in text-to-speech voices. Many of these work offline.
+- **No microphone?** Any coaching stage accepts an uploaded recording (.m4a, .mp3, .wav or .webm). The app analyses the audio in the browser.
 - **Storage:** progress is kept in `localStorage` and recordings in IndexedDB. Unsaved audio is deleted after 30 days. You can export, import or delete everything in Settings.
 
 ## Honest limits

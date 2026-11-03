@@ -170,7 +170,7 @@
     var due = s.words.filter(function (w) { return SRS.isDue(w.card); }).length;
     var prompt = App.seeded(RC.prompts.filter(function (x) { return x.level <= (+p.level.slice(1)) + 1; }), Store.dayKey());
     var upcoming = s.realMoments.filter(function (m) { return !m.done; }).sort(function (a, b) { return a.date.localeCompare(b.date); })[0];
-    var nerves = sessionStorage.getItem('nerves-before');
+    var nerves = App.session.get('nerves-before');
     var hour = new Date().getHours();
     var greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     var html = '<header class="today-head"><div><p class="eyebrow">' + esc(lv.stage) + ' · ' + esc(lv.name) + '</p><h1>' + greet + (p.name ? ', ' + esc(p.name) : '') + '.</h1></div>' +
@@ -192,11 +192,11 @@
     if (nerves) html += '<div class="card"><h3>Finished for today?</h3><p class="muted">How are your nerves now? (you said ' + nerves + ' before)</p><div class="scale">' + [1, 2, 3, 4, 5].map(function (n) { return '<button data-after="' + n + '">' + n + '</button>'; }).join('') + '</div></div>';
     if (s.restTokens > 0 && !s.days[Store.dayKey(Date.now() - 86400000)] && streak === 0 && Object.keys(s.days).length) html += '<p class="muted small">Missed yesterday? <button class="btn ghost sm" data-rest>Use a rest day</button> — life happens.</p>';
     el.innerHTML = html;
-    on(el, '[data-nerve]', 'click', function (e, b) { sessionStorage.setItem('nerves-before', b.getAttribute('data-nerve')); App.render(); });
+    on(el, '[data-nerve]', 'click', function (e, b) { App.session.set('nerves-before', b.getAttribute('data-nerve')); App.render(); });
     on(el, '[data-after]', 'click', function (e, b) {
       var after = +b.getAttribute('data-after');
       Store.update(function (st) { st.courage.push({ ts: Date.now(), before: +nerves, after: after, takes: st.takes.filter(function (t) { return t.ts > Date.now() - 3 * 3600000; }).length }); });
-      sessionStorage.removeItem('nerves-before');
+      App.session.remove('nerves-before');
       App.toast(after < +nerves ? 'Nerves down from ' + nerves + ' to ' + after + '. That\'s courage, logged.' : 'Logged. Showing up nervous is exactly how confidence is built.');
       App.render();
     });

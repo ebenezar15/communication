@@ -18,6 +18,27 @@
       if (t && el.contains(t)) fn(e, t);
     });
   }
+  function hexRgb(hex) {
+    var h = (hex || '').trim().replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h || 'ffd896', 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255].join(',');
+  }
+  function spot() { return hexRgb(getComputedStyle(document.documentElement).getPropertyValue('--spot')); }
+  /** sessionStorage can throw in sandboxed frames; fall back to memory. */
+  var mem = {};
+  var session = {
+    get: function (k) { try { return sessionStorage.getItem(k); } catch (e) { return mem[k] === undefined ? null : mem[k]; } },
+    set: function (k, v) { try { sessionStorage.setItem(k, v); } catch (e) { mem[k] = String(v); } },
+    remove: function (k) { try { sessionStorage.removeItem(k); } catch (e) { delete mem[k]; } }
+  };
+  /** In-page confirmation (native confirm() is blocked in some frames): first tap arms, second tap runs. */
+  function confirmTap(btn, label, fn) {
+    if (btn.classList.contains('confirming')) { fn(); return; }
+    var old = btn.textContent;
+    btn.classList.add('confirming'); btn.textContent = label || 'Tap again to confirm';
+    setTimeout(function () { if (btn.isConnected) { btn.classList.remove('confirming'); btn.textContent = old; } }, 4000);
+  }
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function seeded(arr, seed) { var h = 0; for (var i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0; return arr[h % arr.length]; }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -126,12 +147,20 @@
       '<div class="spot-overlay"><button class="rec-btn" aria-label="Start recording"><span class="rec-dot"></span></button>' +
       '<div class="rec-meta"><span class="rec-status">Tap to speak</span><span class="rec-timer">' + (o.seconds ? fmtTime(o.seconds * 1000) : '') + '</span></div></div></div>' +
       '<div class="timebar" aria-hidden="true"><div></div></div>' +
+      '<p class="mic-note" hidden></p>' +
+      '<div class="upload"><span>No microphone here?</span><label class="btn ghost sm">Upload a recording<input type="file" accept="audio/*" class="upfile" hidden></label></div>' +
       '<p class="live-transcript" aria-live="polite"></p>' +
       '<div class="stage-results"></div>' +
       '</section>';
     this.canvas = $('canvas', this.el);
     this.btn = $('.rec-btn', this.el);
     this.btn.addEventListener('click', function () { self.recording ? self.stop() : self.start(); });
+    $('.upfile', this.el).addEventListener('change', function () {
+      var f = this.files[0];
+      if (!f) return;
+      this.value = '';
+      self.fromFile(f);
+    });
     this.drawIdle();
   };
 
@@ -146,8 +175,9 @@
     var c = this.canvas, g = c.getContext('2d');
     g.clearRect(0, 0, c.width, c.height);
     var grd = g.createRadialGradient(c.width / 2, c.height / 2, 10, c.width / 2, c.height / 2, 140);
-    grd.addColorStop(0, 'rgba(255,214,150,0.22)');
-    grd.addColorStop(1, 'rgba(255,214,150,0)');
+    var c0 = spot();
+    grd.addColorStop(0, 'rgba(' + c0 + ',0.22)');
+    grd.addColorStop(1, 'rgba(' + c0 + ',0)');
     g.fillStyle = grd; g.fillRect(0, 0, c.width, c.height);
   };
 
@@ -160,19 +190,20 @@
     var lvl = Math.min(1, rms * 9);
     this.smooth = (this.smooth || 0) * 0.7 + lvl * 0.3;
     g.clearRect(0, 0, W, H);
+    var sc = this.spotRgb || (this.spotRgb = spot());
     if (reducedMotion()) {
-      g.fillStyle = 'rgba(232,176,75,0.8)';
+      g.fillStyle = 'rgba(' + sc + ',0.8)';
       g.fillRect(20, H - 24, (W - 40) * this.smooth, 10);
     } else {
       var r = 60 + this.smooth * 120;
       var grd = g.createRadialGradient(W / 2, H / 2, 5, W / 2, H / 2, r);
-      grd.addColorStop(0, 'rgba(255,226,170,' + (0.35 + this.smooth * 0.5) + ')');
-      grd.addColorStop(0.6, 'rgba(232,176,75,' + (0.12 + this.smooth * 0.2) + ')');
-      grd.addColorStop(1, 'rgba(232,176,75,0)');
+      grd.addColorStop(0, 'rgba(' + sc + ',' + (0.35 + this.smooth * 0.5) + ')');
+      grd.addColorStop(0.6, 'rgba(' + sc + ',' + (0.12 + this.smooth * 0.2) + ')');
+      grd.addColorStop(1, 'rgba(' + sc + ',0)');
       g.fillStyle = grd; g.fillRect(0, 0, W, H);
     }
     // pitch line
-    g.strokeStyle = 'rgba(255,240,220,0.85)'; g.lineWidth = 2.5; g.beginPath();
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 2.5; g.beginPath();
     var started = false;
     for (var i = 0; i < this.trace.length; i++) {
       var p = this.trace[i];
@@ -186,7 +217,7 @@
 
   Stage.prototype.start = async function () {
     var self = this, o = this.opts, p = Store.get().profile;
-    if (!Audio2.hasMic) { toast('This browser cannot record audio.'); return; }
+    if (!Audio2.hasMic) { this.micUnavailable('This browser can\'t record audio.'); return; }
     Audio2.stopSpeaking();
     $('.stage-results', this.el).innerHTML = '';
     $('.live-transcript', this.el).textContent = '';
@@ -210,7 +241,7 @@
     try {
       await this.rec.start();
     } catch (e) {
-      toast('Microphone unavailable: ' + (e.name === 'NotAllowedError' ? 'permission denied' : e.message));
+      this.micUnavailable(e && e.name === 'NotAllowedError' ? 'The microphone is blocked here.' : 'The microphone isn\'t available here.');
       return;
     }
     this.recording = true;
@@ -221,6 +252,29 @@
     $('.rec-status', this.el).textContent = 'Recording… tap to stop';
     if (o.onStart) o.onStart(this);
     if (o.interrupt && o.interrupt.length) this.scheduleInterrupt();
+  };
+
+  Stage.prototype.micUnavailable = function (why) {
+    var n = $('.mic-note', this.el);
+    n.hidden = false;
+    n.textContent = why + ' Record a voice memo on your phone, then upload it below — you\'ll get the same feedback, and you can type what you said for language notes.';
+    $('.upload', this.el).classList.add('emph');
+    $('.rec-status', this.el).textContent = 'Upload a recording instead';
+  };
+
+  Stage.prototype.fromFile = async function (file) {
+    var self = this;
+    var status = $('.rec-status', this.el);
+    status.textContent = 'Analysing your recording…';
+    $('.stage-results', this.el).innerHTML = '';
+    try {
+      var res = await Audio2.analyzeFile(file, function (p) { status.textContent = 'Analysing… ' + Math.round(p * 100) + '%'; });
+      status.textContent = 'Tap to record, or upload another';
+      self.analyse(res, null);
+    } catch (e) {
+      status.textContent = 'Couldn\'t read that file';
+      toast('That file couldn\'t be decoded. Try an .m4a, .mp3, .wav or .webm recording.');
+    }
   };
 
   Stage.prototype.scheduleInterrupt = function () {
@@ -455,7 +509,7 @@
     on(box, '[data-forge]', 'click', function () {
       var sents = Analysis.splitSentences(ev.transcript);
       var best = sents.length > 1 ? sents.reduce(function (a, b2) { return Analysis.analyzeText(b2).hedgeCount > Analysis.analyzeText(a).hedgeCount ? b2 : a; }) : ev.transcript.split(' ').slice(0, 30).join(' ');
-      sessionStorage.setItem('forge-input', best);
+      session.set('forge-input', best);
       go('#/gym/forge');
     });
     on(box, '[data-typed]', 'click', function () {
@@ -504,6 +558,7 @@
   };
 
   Object.assign(App, {
+    session: session, confirmTap: confirmTap,
     esc: esc, $: $, $$: $$, on: on, pick: pick, seeded: seeded, uid: uid, fmtTime: fmtTime, toast: toast,
     route: route, go: go, render: render, mountStage: mountStage, lesson: lesson, level: level, skill: skill,
     speakAs: speakAs, ttsButton: ttsButton, reducedMotion: reducedMotion, timedWords: timedWords

@@ -1,5 +1,5 @@
 /* Rostrum service worker: cache the whole app so it runs fully offline. Bump VERSION when files change. */
-var VERSION = 'rostrum-v1';
+var VERSION = 'rostrum-v2';
 var FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
   'js/content/curriculum.js', 'js/content/practice.js',

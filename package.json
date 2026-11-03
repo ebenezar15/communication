@@ -5,6 +5,7 @@
   "description": "Offline-first communication coach (PWA). No server, no AI service.",
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "build:single": "node scripts/build-single.js"
   }
 }

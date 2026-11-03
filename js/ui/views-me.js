@@ -37,7 +37,7 @@
     } else {
       var add = $('#nwadd', el);
       if (add) add.onclick = function () { var w = $('#nw', el).value.trim(); if (!w) return; if (App.addWord(w)) { var m = $('#nm', el).value.trim(); if (m) Store.update(function (st) { st.words[st.words.length - 1].meaning = m; }); App.render(); } };
-      on(el, '[data-del]', 'click', function (e, b) { if (!confirm('Remove "' + b.getAttribute('data-del') + '" from your Word Bank?')) return; Store.update(function (st) { st.words = st.words.filter(function (w) { return w.word !== b.getAttribute('data-del'); }); }); App.render(); });
+      on(el, '[data-del]', 'click', function (e, b) { App.confirmTap(b, 'Tap again to remove', function () { Store.update(function (st) { st.words = st.words.filter(function (w) { return w.word !== b.getAttribute('data-del'); }); }); App.render(); }); });
     }
   });
   function wordCard(w) {
@@ -138,7 +138,7 @@
     });
     on(el, '[data-save]', 'click', function (e, b) { Store.update(function (st) { var t = st.takes.find(function (x) { return x.id === b.getAttribute('data-save'); }); if (t) t.saved = !t.saved; }); App.render(); });
     on(el, '[data-deltake]', 'click', function (e, b) { var id = b.getAttribute('data-deltake'); Store.deleteAudio(id); Store.update(function (st) { st.takes = st.takes.filter(function (x) { return x.id !== id; }); }); App.render(); });
-    on(el, '[data-fpreset]', 'click', function () { if (confirm('Delete your whole Speech Fingerprint? Recordings stay.')) { Store.update(function (st) { st.fingerprint = []; }); App.render(); } });
+    on(el, '[data-fpreset]', 'click', function (e, b) { App.confirmTap(b, 'Tap again to reset', function () { Store.update(function (st) { st.fingerprint = []; }); App.render(); }); });
     on(el, '[data-forget]', 'click', function (e, b) {
       var parts = b.getAttribute('data-forget').split(':'), k = parts[0], v = parts[1];
       Store.update(function (st) { st.fingerprint.forEach(function (f) { if (v && f[k] && typeof f[k] === 'object') { if (Array.isArray(f[k])) f[k] = f[k].filter(function (x) { return x !== v; }); else delete f[k][v]; } else delete f[k]; }); });
@@ -224,7 +224,7 @@
           '<li><b>Drills:</b> <a href="#/gym/room/rd2">First 10 Seconds</a> · <a href="#/gym/room/rd1">Power Pause</a> · <a href="#/gym/room/rd3">Land the Ending</a> · <a href="#/gym/room/rd6">"I don\'t know" with authority</a></li>' +
           (s.words.length ? '<li><b>Words to use:</b> ' + s.words.slice(-3).map(function (w) { return esc(w.word); }).join(', ') + '</li>' : '') +
           '<li><b>Final full run:</b> <a href="#/arena/' + sc.id + '">' + esc(sc.name) + '</a> at Tough pressure, the day before.</li></ol>';
-        if (past) html += '<div class="row"><span>How did it go?</span>' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="btn sm" data-out="' + realIdx + ':' + n + '">' + n + '</button>'; }).join('') + '</div>';
+        if (past) html += '<label class="field"><span>One line on how it went (optional)</span><input id="mnote-' + realIdx + '"></label><div class="row"><span>How did it go?</span>' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="btn sm" data-out="' + realIdx + ':' + n + '">' + n + '</button>'; }).join('') + '</div>';
         else html += '<p class="small muted">After ' + esc(m.date) + ', come back and tell me how it went.</p>';
       }
       html += '</section>';
@@ -238,7 +238,8 @@
     };
     on(el, '[data-out]', 'click', function (e, b) {
       var p = b.getAttribute('data-out').split(':');
-      var note = prompt('One line on how it went (optional):') || '';
+      var noteEl = $('#mnote-' + p[0], el);
+      var note = noteEl ? noteEl.value.trim() : '';
       Store.update(function (st) { var m = st.realMoments[+p[0]]; m.done = true; m.outcome = +p[1]; m.note = note; st.courage.push({ ts: Date.now(), before: null, after: null, realMoment: m.title, outcome: m.outcome }); });
       Store.addXp(40, 'Real Moment done');
       App.render();
@@ -258,19 +259,31 @@
       '<section class="card"><h2>Transcripts & privacy</h2><div id="srinfo2" class="muted small"></div><div class="seg" id="srmode2"><button data-mode="local">On-device only</button><button data-mode="auto">Best available</button><button data-mode="off">Off (audio only)</button></div></section>' +
       '<section class="card"><h2>Fair scoring</h2>' + toggle('stutterFriendly', st.stutterFriendly, 'Stutter-friendly mode', 'Turns off fluency, filler, pace and repetition scoring. Dysfluency is never a failure.') +
       toggle('scoreFillers', st.scoreFillers, 'Score fillers') + toggle('scorePace', st.scorePace, 'Score pace and pauses') + '</section>' +
-      '<section class="card"><h2>Display</h2>' + radio('theme', p.theme, [['auto', 'Auto'], ['dark', 'Backstage (dark)'], ['light', 'House lights (light)']]) + toggle('reducedMotion', st.reducedMotion, 'Reduce motion') + '</section>' +
+      '<section class="card"><h2>Colour scheme</h2><div class="schemes" role="radiogroup" aria-label="Colour scheme">' + App.SCHEMES.map(function (sc) {
+        return '<button class="scheme ' + (p.scheme === sc.id ? 'sel' : '') + '" role="radio" aria-checked="' + (p.scheme === sc.id) + '" data-set="scheme" data-val="' + sc.id + '"><span class="swatch" aria-hidden="true">' + sc.swatch.map(function (c) { return '<i style="background:' + c + '"></i>'; }).join('') + '</span><b>' + esc(sc.name) + '</b><small class="muted">' + esc(sc.desc) + '</small></button>';
+      }).join('') + '</div><h3>Light or dark</h3>' + radio('theme', p.theme, [['auto', 'Match my device'], ['dark', 'Dark'], ['light', 'Light']]) + toggle('reducedMotion', st.reducedMotion, 'Reduce motion') + '</section>' +
       '<section class="card"><h2>Your data</h2><p class="small muted">Everything lives on this device. Export is a JSON file of your progress (recordings stay in the browser).</p><div class="row"><button class="btn" id="exp">Export progress</button><label class="btn">Import<input type="file" accept="application/json" id="imp" hidden></label><button class="btn danger" id="wipe">Delete everything</button></div>' +
       '<p class="small">' + s.reports.length + ' "That\'s wrong" report(s) stored locally.' + (s.reports.length ? ' <button class="btn ghost xs" id="exrep">Export reports</button>' : '') + '</p></section>' +
       '<section class="card"><h2>About Rostrum</h2><p class="small">Offline-first communication coach. No accounts, no servers, no AI service: measurements are computed in your browser and feedback comes from transparent rules. Scores are signals, not verdicts — tap "That\'s wrong" whenever one misses. Not a substitute for therapy; if speaking anxiety is overwhelming, talking to a professional can help.</p></section>';
     App.renderTranscriptChooser($('#srinfo2', el), $('#srmode2', el));
-    on(el, '[data-set]', 'click', function (e, b) { var k = b.getAttribute('data-set'), v = b.getAttribute('data-val'); Store.update(function (x) { x.profile[k] = v; }); if (k === 'theme') App.applyTheme(); App.render(); });
+    on(el, '[data-set]', 'click', function (e, b) { var k = b.getAttribute('data-set'), v = b.getAttribute('data-val'); Store.update(function (x) { x.profile[k] = v; }); if (k === 'theme' || k === 'scheme') App.applyTheme(); App.render(); });
     on(el, '[data-tog]', 'change', function (e, b) { var k = b.getAttribute('data-tog'); Store.update(function (x) { x.profile.settings[k] = b.checked; }); });
     $('#sname', el).onchange = function () { var v = this.value.trim(); Store.update(function (x) { x.profile.name = v; }); };
     $('#srate', el).oninput = function () { var v = parseFloat(this.value); $('#srv', el).textContent = v + '×'; Store.update(function (x) { x.profile.mentorRate = v; }); };
-    function download(name, text) { var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = name; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000); }
+    function download(name, text) {
+      if (window.claude && window.claude.use) {
+        window.claude.use('downloads').then(function (d) {
+          if (d) return d.save({ filename: name, data: text }).catch(function () { App.toast('Download cancelled.'); });
+          plain(name, text);
+        });
+        return;
+      }
+      plain(name, text);
+    }
+    function plain(name, text) { var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = name; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000); }
     $('#exp', el).onclick = function () { download('rostrum-export-' + Store.dayKey() + '.json', Store.exportAll()); };
     var er = $('#exrep', el); if (er) er.onclick = function () { download('rostrum-reports.json', JSON.stringify(Store.get().reports, null, 2)); };
     $('#imp', el).onchange = function () { var f = this.files[0]; if (!f) return; f.text().then(function (t) { try { Store.importAll(t); App.toast('Imported.'); App.render(); } catch (err) { App.toast('Import failed: ' + err.message); } }); };
-    $('#wipe', el).onclick = function () { if (confirm('Delete ALL progress and recordings from this device? This cannot be undone.')) { Store.reset().then(function () { sessionStorage.clear(); location.hash = '#/welcome'; location.reload(); }); } };
+    $('#wipe', el).onclick = function () { App.confirmTap(this, 'Tap again: erase everything', function () { Store.reset().then(function () { App.session.remove('nerves-before'); location.hash = '#/welcome'; App.render(); App.toast('Everything erased.'); }); }); };
   });
 })(window);
